@@ -32,9 +32,9 @@ class Scene:
         """b
         :param path: Path to colmap scene main folder.
         """
-        self.model_path = args.model_path
-        self.loaded_iter = None
-        self.gaussians = gaussians
+        self.model_path = args.model_path # 저장 경로
+        self.loaded_iter = None # 이어서 학습할 거라면
+        self.gaussians = gaussians # 인자로 받은 가우시안
         
         if load_iteration:
             if load_iteration == -1:
@@ -45,32 +45,38 @@ class Scene:
 
         self.train_cameras = {}
         self.test_cameras = {}
-        self.video_cameras = {}
+        self.video_cameras = {} # 쓰이지 않음
 
         scene_info = sceneLoadTypeCallbacks2["ER-NeRF"](args.source_path, False, args.eval, custom_aud=custom_aud)
         dataset_type = "ER-NeRF"
         
-        self.maxtime = scene_info.maxtime
-        self.dataset_type = dataset_type
-        self.cameras_extent = scene_info.nerf_normalization["radius"]
+        self.maxtime = scene_info.maxtime # 5451
+        self.dataset_type = dataset_type # "ER-NeRF"
+        self.cameras_extent = scene_info.nerf_normalization["radius"] # 2.8390269279479985
 
         print("Loading Training Cameras")
         self.train_camera = FourDGSdataset(scene_info.train_cameras, args, dataset_type)
         print("Loading Test Cameras")
         self.test_camera = FourDGSdataset(scene_info.test_cameras, args, dataset_type)
         print("Loading Video Cameras")
-        self.video_camera = FourDGSdataset(scene_info.video_cameras, args, dataset_type)
-        if custom_aud:
+        self.video_camera = FourDGSdataset(scene_info.video_cameras, args, dataset_type) # 사용하지 않음
+        if custom_aud: # None
             print("Loading Custom Cameras")
             self.custom_camera = FourDGSdataset(scene_info.custom_cameras, args, dataset_type)
 
         # self.video_camera = cameraList_from_camInfos(scene_info.video_cameras,-1,args)
-        xyz_max = scene_info.point_cloud.points.max(axis=0)
-        xyz_min = scene_info.point_cloud.points.min(axis=0)
+        xyz_max = scene_info.point_cloud.points.max(axis=0) # 각 축의 최댓값 [x_max, y_max, z_max]
+        xyz_min = scene_info.point_cloud.points.min(axis=0) # 각 축의 최솟값 [x_min, y_min, z_min]
+        # 목적: 포인트 클라우드가 차지하는 3D 공간 범위 정의
+
+        # AABB 내에서 랜덤 포인트 10만 개 추가
         if args.add_points:
             print("add points.")
             scene_info = scene_info._replace(point_cloud=add_points(scene_info.point_cloud, xyz_max=xyz_max, xyz_min=xyz_min))
+        
+        # Deformation network의 그리드가 작동할 공간 범위 설정
         self.gaussians._deformation.deformation_net.set_aabb(xyz_max,xyz_min)
+
         if self.loaded_iter:
             self.gaussians.load_ply(os.path.join(self.model_path,
                                                            "point_cloud",

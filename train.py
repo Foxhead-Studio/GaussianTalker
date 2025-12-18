@@ -52,7 +52,9 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         (model_params, first_iter) = torch.load(checkpoint)
         gaussians.restore(model_params, opt)
 
-
+    # 'fine' 단계에서 처음으로 학습을 시작할 때, MLP(다중 퍼셉트론) 네트워크를 CPU로 이동하는 과정입니다.
+    # 이는 아마도 coarse 단계에서는 GPU 메모리 절약 또는 최적화를 위해 MLP를 꺼내두었다가,
+    # fine 단계에서 CPU 연산으로 전환/관리를 하려는 목적이 있을 수 있습니다.
     if stage == "fine" and first_iter == 0:
         gaussians.mlp2cpu()
         
@@ -77,6 +79,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
     batch_size = opt.batch_size
     if stage == 'coarse':batch_size=1
     print("data loading done")
+
     if opt.dataloader:
         viewpoint_stack = scene.getTrainCameras()
         if opt.custom_sampler is not None:
@@ -150,7 +153,7 @@ def scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_i
         
         random_color = False
         
-        output = render_from_batch(viewpoint_cams, gaussians, pipe, random_color, stage=stage, batch_size=batch_size, canonical_tri_plane_factor_list=opt.canonical_tri_plane_factor_list,iteration=iteration)
+        output = render_from_batch(viewpoint_cams, gaussians, pipe, random_color, stage=stage, batch_size=batch_size, canonical_tri_plane_factor_list=opt.canonical_tri_plane_factor_list, iteration=iteration)
         
         image_tensor=output["rendered_image_tensor"]
         gt_image_tensor=output["gt_tensor"]
@@ -264,8 +267,8 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     if use_wandb:
         wandb.init(project="TalkingGaussians", name=expname)
         
-    gaussians = GaussianModel(dataset.sh_degree, hyper)
-    dataset.model_path = args.model_path
+    gaussians = GaussianModel(dataset.sh_degree, hyper) # max SH degree와 deformation network에 필요한 인자를 입력
+    dataset.model_path = args.model_path # 모델 저장 경로
     timer = Timer()
     scene = Scene(dataset, gaussians, load_coarse=None)
     timer.start()
@@ -275,13 +278,13 @@ def training(dataset, hyper, opt, pipe, testing_iterations, saving_iterations, c
     print(opt.train_l)
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                              checkpoint_iterations, checkpoint, debug_from,
-                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations,timer, use_wandb)
+                             gaussians, scene, "coarse", tb_writer, opt.coarse_iterations, timer, use_wandb)
     
     opt.train_l = train_l_temp
     print(opt.train_l)
     scene_reconstruction(dataset, opt, hyper, pipe, testing_iterations, saving_iterations,
                          checkpoint_iterations, checkpoint, debug_from,
-                         gaussians, scene, "fine", tb_writer, opt.iterations,timer, use_wandb)
+                         gaussians, scene, "fine", tb_writer, opt.iterations, timer, use_wandb)
 
 def prepare_output_and_logger(expname):    
     if not args.model_path:
@@ -367,6 +370,7 @@ def setup_seed(seed):
      np.random.seed(seed)
      random.seed(seed)
      torch.backends.cudnn.deterministic = True
+
 if __name__ == "__main__":
     # Set up command line argument parser
     # torch.set_default_tensor_type('torch.FloatTensor')

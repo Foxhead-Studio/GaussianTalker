@@ -206,7 +206,7 @@ def euler2rot(euler_angle):
 def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features, eye_features, 
                                     extension=".jpg", mapper = {}, preload=False, custom_aud =None):
     cam_infos = []
-    mesh_path = os.path.join(path, meshfile)
+    mesh_path = os.path.join(path, meshfile) # /data/obama/track_params.pt'
     track_params = torch.load(mesh_path)
     trans_infos = torch.load(mesh_path)["trans"]
     
@@ -242,13 +242,13 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
         
     for idx, frame in enumerate(frames): # len(frames): 7272
         
-        cam_name = os.path.join(f_path, str(frame["img_id"]) + extension)
+        cam_name = os.path.join(f_path, str(frame["img_id"]) + extension) # /data/obama/ori_imgs/0.jpg'
         aud_feature = get_audio_features(auds, att_mode = 2, index = idx)     
         
         
         # Camera Codes
         euler = track_params["euler"][frame["img_id"]]
-        R = euler2rot(euler.unsqueeze(0))
+        R = euler2rot(euler.unsqueeze(0)) # 오일러 각도를 회전 행렬로 변환 (ZYX 순서로 회전 행렬 생성). 이 시점의 R은 얼굴 좌표계에서의 회전 행렬.
         
         flip_rot = torch.tensor(
             [[-1,  0,  0],  # This flips the X axis
@@ -257,19 +257,19 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
             dtype=R.dtype,
             device=R.device
         ).view(1, 3, 3)
-        # flip_rot = flip_rot.expand_as(R)  # Make sure it has the same batch size as R
+        # flip_rot = flip_rot.expand_as(R)  # Make sure it has the same batch size as R X축을 뒤집는 행렬
 
         # Apply the flip rotation by matrix multiplication
         # Depending on your convention, you might need to apply the flip before or after the original rotation.
         # Use torch.matmul(flip_rot, R) if the flip should be applied globally first,
         # or torch.matmul(R, flip_rot) if the flip should be applied in the camera's local space.
-        R = torch.matmul(flip_rot, R)
+        R = torch.matmul(flip_rot, R) # 전역 좌표계에서 X축 뒤집기 적용. 목적: 3DMM 좌표계와 NeRF/Gaussian Splatting 좌표계 간 변환.
         R = R.squeeze(0).cpu().numpy()
         T = track_params["trans"][frame["img_id"]].unsqueeze(0).cpu().numpy()
         
         R = -np.transpose(R)
         T = -T
-        T[:, 0] = -T[:, 0] 
+        T[:, 0] = -T[:, 0] # 얼굴은 가만히 있고 카메라가 움직이도록 행렬 변환.
 
         # Get Iamges for Facial 
         image_name = Path(cam_name).stem
@@ -334,7 +334,7 @@ def readCamerasFromTracksTransforms(path, meshfile, transformsfile, aud_features
                         torso_image=torso_img, torso_image_path=torso_image_path, bg_image=bg_img, bg_image_path=bg_image_path,
                         mask=seg, mask_path=mask_path, trans=trans_infos[frame["img_id"]],
                         face_rect=face_rect, lhalf_rect=lhalf_rect, aud_f=aud_feature, eye_f=eye_area, eye_rect=eye_rect, lips_rect=lips_rect))
-    return cam_infos     
+    return cam_infos
 
 
 
@@ -346,8 +346,8 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
     aud_features = torch.from_numpy(aud_features)
 
     # support both [N, 16] labels and [N, 16, K] logits
-    if len(aud_features.shape) == 3:
-        aud_features = aud_features.float().permute(0, 2, 1) # [N, 16, 29] --> [N, 29, 16]    
+    if len(aud_features.shape) == 3: # True
+        aud_features = aud_features.float().permute(0, 2, 1) # [N, 16, 29] --> [N, 29, 16] # [5453, 29, 16]
     else:
         raise NotImplementedError(f'[ERROR] aud_features.shape {aud_features.shape} not supported')
 
@@ -357,7 +357,7 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
     # load action units
     import pandas as pd
     au_blink_info=pd.read_csv(os.path.join(path, 'au.csv'))
-    eye_features = au_blink_info['AU45_r'].values
+    eye_features = au_blink_info['AU45_r'].values # (5452, )
     
     
     ply_path = os.path.join(path, "fused.ply")
@@ -369,7 +369,7 @@ def readTalkingPortraitDatasetInfo(path, white_background, eval, extension=".jpg
     print("Reading Test Transforms")
     test_cam_infos = readCamerasFromTracksTransforms(path, "track_params.pt", "transforms_val.json", aud_features, eye_features, extension, timestamp_mapper)
     print("Generating Video Transforms")
-    video_cam_infos = None 
+    video_cam_infos = None
 
     if custom_aud:
         aud_features = np.load(os.path.join(path, custom_aud))
